@@ -1,0 +1,30 @@
+[
+  {
+    "timestamp": "2026-11-20 11:29:04",
+    "player": "gheison08",
+    "rating_stars": 4,
+    "ux_perception": "Clara y fluida",
+    "comment": "zzzzz",
+    "game_result": {
+      "score": 0,
+      "total_questions": 8,
+      "survived": false,
+      "final_temp_c": 100
+    }
+  },
+  {
+    "timestamp": "2026-11-20 12:38:47",
+    "player": "stuard",
+    "rating_stars": 5,
+    "ux_perception": "Muy estresante",
+    "comment": "buena dificultad",
+    "badge_title": "SENIOR FIREFIGHTER",
+    "badge_icon": "🧯",
+    "game_result": {
+      "score": 5,
+      "total_questions": 8,
+      "survived": true,
+      "final_temp_c": 80
+    }
+  }
+]

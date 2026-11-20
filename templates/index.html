@@ -1,0 +1,1163 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Legacy Code Survivor // Producción en Llamas</title>
+  <style>
+    :root {
+      --bg: #070b10;
+      --panel: rgba(14, 21, 31, 0.88);
+      --border: #24354a;
+      --text: #e2e8f0;
+      --muted: #8ca0b8;
+      --green: #00ff88;
+      --amber: #ffaa00;
+      --red: #ff3355;
+      --blue: #38bdf8;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Consolas', 'Courier New', monospace;
+      background-color: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      display: flex;
+      justify-content: center;
+      padding: 20px;
+      position: relative;
+      overflow-x: hidden;
+    }
+
+    /* Fondo creativo animado en Canvas */
+    #bg-canvas {
+      position: fixed;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      z-index: -2;
+      pointer-events: none;
+    }
+
+    /* Viñeta sutil sobre el canvas */
+    body::before {
+      content: "";
+      position: fixed;
+      inset: 0;
+      background: radial-gradient(circle at center, transparent 35%, rgba(4, 7, 11, 0.85) 100%);
+      z-index: -1;
+      pointer-events: none;
+    }
+
+    /* Scanlines CRT */
+    body::after {
+      content: "";
+      position: fixed;
+      inset: 0;
+      background: repeating-linear-gradient(
+        0deg,
+        rgba(0, 0, 0, 0.12) 0px,
+        rgba(0, 0, 0, 0.12) 1px,
+        transparent 1px,
+        transparent 3px
+      );
+      pointer-events: none;
+      z-index: 999;
+    }
+
+    #red-flash {
+      position: fixed;
+      inset: 0;
+      background: rgba(255, 51, 85, 0.28);
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.2s ease;
+      z-index: 900;
+    }
+
+    .container {
+      width: 100%;
+      max-width: 980px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      z-index: 1;
+    }
+
+    @keyframes glitchShake {
+      0% { transform: translate(0, 0); }
+      20% { transform: translate(-6px, 3px); filter: hue-rotate(25deg); }
+      40% { transform: translate(6px, -3px); }
+      60% { transform: translate(-4px, -2px); }
+      80% { transform: translate(4px, 2px); }
+      100% { transform: translate(0, 0); filter: none; }
+    }
+    .shake { animation: glitchShake 0.35s ease; }
+
+    header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 12px;
+      background: var(--panel);
+      backdrop-filter: blur(8px);
+      border: 1px solid var(--border);
+      padding: 14px 18px;
+      border-radius: 8px;
+    }
+
+    .brand h1 {
+      font-size: 1.25rem;
+      color: var(--green);
+      letter-spacing: 1px;
+    }
+    .brand small { color: var(--muted); font-size: 0.8rem; }
+
+    .header-controls {
+      display: flex;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .status-pill {
+      padding: 6px 12px;
+      border-radius: 4px;
+      font-weight: bold;
+      font-size: 0.82rem;
+      border: 1px solid var(--green);
+      color: var(--green);
+      background: rgba(0, 255, 136, 0.08);
+    }
+    .status-pill.err {
+      border-color: var(--red);
+      color: var(--red);
+      background: rgba(255, 51, 85, 0.15);
+      animation: pulse 0.8s infinite;
+    }
+    @keyframes pulse { 50% { opacity: 0.5; } }
+
+    .btn-ghost {
+      background: rgba(15, 23, 35, 0.85);
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 6px 11px;
+      border-radius: 5px;
+      cursor: pointer;
+      font-family: inherit;
+      font-size: 0.82rem;
+      transition: border-color 0.2s, color 0.2s;
+    }
+    .btn-ghost:hover { border-color: var(--blue); color: var(--blue); }
+    .btn-ghost.active { border-color: var(--green); color: var(--green); }
+
+    /* Telemetría */
+    .telemetry {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 12px;
+    }
+    .metric-card {
+      background: var(--panel);
+      backdrop-filter: blur(8px);
+      border: 1px solid var(--border);
+      padding: 12px;
+      border-radius: 8px;
+    }
+    .metric-head {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.8rem;
+      color: var(--muted);
+      margin-bottom: 8px;
+    }
+    .bar-bg {
+      height: 10px;
+      background: #1a2434;
+      border-radius: 5px;
+      overflow: hidden;
+    }
+    .bar-fill {
+      height: 100%;
+      width: 45%;
+      background: var(--green);
+      transition: width 0.4s ease, background 0.3s ease;
+    }
+
+    .card {
+      background: var(--panel);
+      backdrop-filter: blur(8px);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 22px;
+    }
+
+    .hidden { display: none !important; }
+
+    #start-screen {
+      text-align: center;
+      padding: 36px 22px;
+    }
+    #start-screen p {
+      color: var(--muted);
+      max-width: 620px;
+      margin: 14px auto 22px;
+      line-height: 1.55;
+    }
+
+    input[type="text"], textarea, select {
+      background: rgba(7, 11, 16, 0.9);
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 10px 12px;
+      border-radius: 6px;
+      font-family: inherit;
+      width: 100%;
+    }
+    input:focus, textarea:focus, select:focus {
+      outline: none;
+      border-color: var(--green);
+    }
+
+    .btn-primary {
+      background: var(--green);
+      color: #05140c;
+      border: none;
+      padding: 12px 22px;
+      font-weight: bold;
+      font-family: inherit;
+      font-size: 0.92rem;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: transform 0.1s ease, opacity 0.2s;
+    }
+    .btn-primary:hover { opacity: 0.9; transform: translateY(-1px); }
+
+    /* Trivia */
+    .quiz-meta {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 14px;
+      font-size: 0.85rem;
+      color: var(--blue);
+    }
+    .timer-box { font-weight: bold; color: var(--amber); font-size: 1rem; }
+    .timer-box.urgent { color: var(--red); animation: pulse 0.5s infinite; }
+
+    .question-text {
+      font-size: 1.08rem;
+      line-height: 1.5;
+      margin-bottom: 18px;
+    }
+
+    .options-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      margin-bottom: 18px;
+    }
+    @media (max-width: 680px) {
+      .options-grid, .telemetry, .kpi-grid { grid-template-columns: 1fr; }
+    }
+
+    .option-btn {
+      background: rgba(15, 22, 32, 0.9);
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 14px;
+      text-align: left;
+      border-radius: 6px;
+      cursor: pointer;
+      font-family: inherit;
+      font-size: 0.88rem;
+      transition: border-color 0.2s, background 0.2s;
+    }
+    .option-btn:hover:not(:disabled) {
+      border-color: var(--blue);
+      background: rgba(24, 38, 56, 0.95);
+    }
+    .option-btn.correct { border-color: var(--green); background: rgba(0, 255, 136, 0.16); }
+    .option-btn.wrong { border-color: var(--red); background: rgba(255, 51, 85, 0.16); }
+    .option-btn.eliminated { opacity: 0.25; text-decoration: line-through; cursor: not-allowed; }
+
+    .lifelines {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      border-top: 1px solid var(--border);
+      padding-top: 14px;
+    }
+    .btn-lifeline {
+      background: rgba(24, 35, 52, 0.9);
+      border: 1px solid var(--blue);
+      color: var(--blue);
+      padding: 8px 14px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-family: inherit;
+      font-size: 0.85rem;
+    }
+    .btn-lifeline:disabled {
+      opacity: 0.35;
+      cursor: not-allowed;
+      border-color: var(--border);
+      color: var(--muted);
+    }
+
+    /* Consola */
+    .console-box {
+      background: rgba(6, 9, 13, 0.92);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 12px 14px;
+      height: 130px;
+      overflow-y: auto;
+      font-size: 0.8rem;
+      line-height: 1.45;
+    }
+    .log-ok { color: var(--green); }
+    .log-err { color: var(--red); }
+    .log-info { color: var(--blue); }
+    .log-warn { color: var(--amber); }
+
+    /* Ticket QA */
+    .locked-banner {
+      background: rgba(255, 170, 0, 0.1);
+      border: 1px dashed var(--amber);
+      color: var(--amber);
+      padding: 12px;
+      border-radius: 6px;
+      margin-bottom: 18px;
+      font-size: 0.88rem;
+    }
+    .form-group { margin-bottom: 14px; }
+    .form-group label { display: block; margin-bottom: 6px; font-size: 0.85rem; color: var(--muted); }
+    .stars { display: flex; gap: 8px; font-size: 1.8rem; cursor: pointer; }
+    .star { color: #334155; transition: color 0.15s; }
+    .star.active { color: var(--amber); }
+
+    /* Badge final */
+    .badge-card {
+      text-align: center;
+      padding: 26px;
+      border: 2px solid var(--green);
+      border-radius: 10px;
+      background: rgba(10, 17, 26, 0.92);
+    }
+    .badge-icon { font-size: 3.5rem; margin-bottom: 10px; }
+    .badge-title { font-size: 1.4rem; margin-bottom: 8px; }
+    .stats-row {
+      display: flex;
+      justify-content: center;
+      flex-wrap: wrap;
+      gap: 20px;
+      margin: 18px 0;
+      font-size: 0.9rem;
+      color: var(--blue);
+    }
+
+    /* Vista Separada: Tabla de Puntuaciones y QA */
+    .records-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+    .kpi-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 12px;
+      margin-bottom: 18px;
+    }
+    .kpi-box {
+      background: rgba(7, 11, 16, 0.85);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 12px 14px;
+      text-align: center;
+    }
+    .kpi-box small { color: var(--muted); font-size: 0.78rem; display: block; margin-bottom: 4px; }
+    .kpi-box strong { font-size: 1.35rem; color: var(--green); }
+
+    .table-wrap {
+      overflow-x: auto;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.82rem;
+    }
+    th, td {
+      padding: 10px 12px;
+      text-align: left;
+      border-bottom: 1px solid #1b2838;
+      vertical-align: top;
+    }
+    th {
+      background: rgba(15, 23, 35, 0.95);
+      color: var(--blue);
+      text-transform: uppercase;
+      font-size: 0.75rem;
+      letter-spacing: 0.5px;
+    }
+    tr:hover td { background: rgba(56, 189, 248, 0.05); }
+    .tag-ok { color: var(--green); font-weight: bold; }
+    .tag-crash { color: var(--red); font-weight: bold; }
+    .star-cell { color: var(--amber); white-space: nowrap; }
+  </style>
+</head>
+<body>
+  <canvas id="bg-canvas"></canvas>
+  <div id="red-flash"></div>
+
+  <div class="container" id="app-root">
+    <!-- Encabezado -->
+    <header>
+      <div class="brand">
+        <h1>&gt;_ LEGACY CODE SURVIVOR</h1>
+        <small>Simulador de Crisis en Producción v3.0</small>
+      </div>
+      <div class="header-controls">
+        <span id="http-status" class="status-pill">200 OK</span>
+        <button id="music-btn" class="btn-ghost" title="Activar/Pausar música de fondo">🎵 Música ON</button>
+        <button id="mute-btn" class="btn-ghost" title="Activar/Silenciar efectos">🔊 SFX ON</button>
+        <button id="records-btn" class="btn-ghost" title="Ver puntuaciones y comentarios QA">📊 Tabla QA</button>
+      </div>
+    </header>
+
+    <!-- Telemetría en tiempo real -->
+    <section class="telemetry" id="telemetry-bar">
+      <div class="metric-card">
+        <div class="metric-head"><span>TEMP SERVIDOR (Crítico: 100°C)</span><strong id="temp-val">45°C</strong></div>
+        <div class="bar-bg"><div id="temp-bar" class="bar-fill" style="width: 45%;"></div></div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-head"><span>CARGA CPU</span><strong id="cpu-val">32%</strong></div>
+        <div class="bar-bg"><div id="cpu-bar" class="bar-fill" style="width: 32%;"></div></div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-head"><span>USO RAM</span><strong id="ram-val">40%</strong></div>
+        <div class="bar-bg"><div id="ram-bar" class="bar-fill" style="width: 40%;"></div></div>
+      </div>
+    </section>
+
+    <!-- Pantalla 1: Inicio -->
+    <section id="start-screen" class="card">
+      <h2>⚠️ ALERTA: PRODUCCIÓN SE ESTÁ CAYENDO</h2>
+      <p>
+        Eres el ingeniero de guardia. Se cargarán <strong>8 incidencias aleatorias</strong> bajo contrarreloj antes de que el servidor alcance los <strong>100°C</strong>.
+        Cada error dispara alertas rojas y acelera la tensión; cada acierto estabiliza un módulo.
+      </p>
+      <div style="max-width: 340px; margin: 0 auto 18px;">
+        <input type="text" id="player-name" placeholder="Tu nombre o alias de Dev..." />
+      </div>
+      <button id="start-btn" class="btn-primary">INICIAR GUARDIA DE PRODUCCIÓN</button>
+    </section>
+
+    <!-- Pantalla 2: Trivia Activa -->
+    <section id="quiz-screen" class="card hidden">
+      <div class="quiz-meta">
+        <span id="module-tag">[MÓDULO: ---]</span>
+        <span id="progress-tag">Incidencia 1 / 8</span>
+        <span id="timer-display" class="timer-box">⏱️ 20s</span>
+      </div>
+
+      <div id="question-text" class="question-text">Cargando incidencia...</div>
+      <div id="options-grid" class="options-grid"></div>
+
+      <div class="lifelines">
+        <button id="btn-hotfix" class="btn-lifeline">🔧 Hotfix (Eliminar 2)</button>
+        <button id="btn-stack" class="btn-lifeline">📚 Stack Overflow (Pista)</button>
+      </div>
+    </section>
+
+    <!-- Pantalla 3: Ticket QA Obligatorio -->
+    <section id="qa-screen" class="card hidden">
+      <h2 id="qa-headline" style="margin-bottom: 10px;">📋 TICKET DE CIERRE / QA SIGN-OFF</h2>
+      <div class="locked-banner">
+        🔒 <strong>PUNTAJE Y BADGE BLOQUEADOS:</strong> Por protocolo de calidad, debes documentar y calificar tu experiencia de usuario para desbloquear tu resultado final.
+      </div>
+
+      <form id="qa-form">
+        <div class="form-group">
+          <label>1. Calificación general de la experiencia (Obligatorio):</label>
+          <div class="stars" id="star-rating">
+            <span class="star" data-val="1">★</span>
+            <span class="star" data-val="2">★</span>
+            <span class="star" data-val="3">★</span>
+            <span class="star" data-val="4">★</span>
+            <span class="star" data-val="5">★</span>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label for="ux-feel">2. ¿Cómo sentiste la tensión e interfaz del sistema?</label>
+          <select id="ux-feel">
+            <option value="Inmersiva y tensa">Inmersiva y con buena tensión</option>
+            <option value="Clara y fluida">Clara, fluida y fácil de entender</option>
+            <option value="Muy estresante">Demasiado estresante (¡me gustó!)</option>
+            <option value="Mejorable">Interesante, pero visualmente mejorable</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label for="qa-comment">3. Comentario de documentación UX (mín. 5 caracteres):</label>
+          <textarea id="qa-comment" rows="3" placeholder="¿Qué te pareció la música, las alertas, los comodines o la dificultad?"></textarea>
+        </div>
+
+        <p id="qa-error" style="color: var(--red); font-size: 0.85rem; margin-bottom: 10px;"></p>
+        <button type="submit" class="btn-primary">FIRMAR QA Y DESBLOQUEAR BADGE</button>
+      </form>
+    </section>
+
+    <!-- Pantalla 4: Resultado y Badge Desbloqueado -->
+    <section id="result-screen" class="card hidden">
+      <div id="badge-card" class="badge-card">
+        <div id="badge-icon" class="badge-icon">🛡️</div>
+        <h2 id="badge-title" class="badge-title">BADGE</h2>
+        <p id="badge-desc" style="color: var(--muted);"></p>
+        <div class="stats-row">
+          <span id="final-score">Aciertos: 0/8</span>
+          <span id="final-temp">Temp Final: 45°C</span>
+          <span id="community-avg">UX Promedio Global: ★ 0.0</span>
+        </div>
+        <div style="display: flex; justify-content: center; gap: 12px; flex-wrap: wrap;">
+          <button onclick="location.reload()" class="btn-primary">NUEVA GUARDIA</button>
+          <button id="go-records-btn" class="btn-ghost" style="padding: 12px 18px;">📊 VER TABLA DE PUNTUACIONES Y QA</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- Vista Separada 5: Tabla de Puntuaciones y Comentarios QA -->
+    <section id="records-screen" class="card hidden">
+      <div class="records-header">
+        <div>
+          <h2 style="color: var(--blue);">📊 REGISTRO DE GUARDIAS Y EVALUACIÓN UX</h2>
+          <small style="color: var(--muted);">Datos persistidos en tiempo real desde qa_reviews.json</small>
+        </div>
+        <div style="display: flex; gap: 8px; align-items: center;">
+          <select id="sort-records" style="width: auto; padding: 6px 10px; font-size: 0.82rem;">
+            <option value="recent">Orden: Más recientes</option>
+            <option value="score">Orden: Mayor puntaje</option>
+            <option value="rating">Orden: Mejor UX (★)</option>
+          </select>
+          <button id="back-game-btn" class="btn-primary" style="padding: 8px 14px; font-size: 0.82rem;">← VOLVER</button>
+        </div>
+      </div>
+
+      <div class="kpi-grid">
+        <div class="kpi-box">
+          <small>TOTAL DE USUARIOS</small>
+          <strong id="kpi-total">0</strong>
+        </div>
+        <div class="kpi-box">
+          <small>CALIFICACIÓN UX PROMEDIO</small>
+          <strong id="kpi-avg" style="color: var(--amber);">★ 0.0</strong>
+        </div>
+        <div class="kpi-box">
+          <small>TASA DE SUPERVIVENCIA</small>
+          <strong id="kpi-surv" style="color: var(--blue);">0%</strong>
+        </div>
+      </div>
+
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Operador</th>
+              <th>Resultado / Badge</th>
+              <th>Aciertos</th>
+              <th>Temp</th>
+              <th>UX (★)</th>
+              <th>Percepción</th>
+              <th>Comentario</th>
+              <th>Fecha</th>
+            </tr>
+          </thead>
+          <tbody id="records-tbody">
+            <tr><td colspan="8" style="text-align:center; color: var(--muted);">Cargando registros...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- Consola de Logs en vivo -->
+    <section class="console-box" id="console-log">
+      <div class="log-info">[SYSTEM] Terminal de monitoreo inicializada. Esperando operador...</div>
+    </section>
+  </div>
+
+  <script>
+    // =========================================================================
+    // 1. FONDO CREATIVO REACTIVO (RED DE NODOS + PULSOS DE TELEMETRÍA EN CANVAS)
+    // =========================================================================
+    const bgCanvas = document.getElementById("bg-canvas");
+    const ctx = bgCanvas.getContext("2d");
+    let nodes = [];
+    let currentTempRef = 45;
+
+    function resizeCanvas() {
+      bgCanvas.width = window.innerWidth;
+      bgCanvas.height = window.innerHeight;
+      nodes = Array.from({ length: 48 }, () => ({
+        x: Math.random() * bgCanvas.width,
+        y: Math.random() * bgCanvas.height,
+        vx: (Math.random() - 0.5) * 0.6,
+        vy: (Math.random() - 0.5) * 0.6,
+        r: Math.random() * 2 + 1.2,
+        hex: "0x" + Math.floor(Math.random() * 255).toString(16).toUpperCase().padStart(2, "0")
+      }));
+    }
+    window.addEventListener("resize", resizeCanvas);
+    resizeCanvas();
+
+    function drawBackground() {
+      ctx.fillStyle = "rgba(7, 11, 16, 0.25)";
+      ctx.fillRect(0, 0, bgCanvas.width, bgCanvas.height);
+
+      // Paleta reactiva según temperatura del servidor
+      const accent = currentTempRef >= 80
+        ? "255, 51, 85"
+        : currentTempRef >= 65
+        ? "255, 170, 0"
+        : "0, 255, 136";
+
+      // Cuadrícula sutil de fondo
+      ctx.strokeStyle = `rgba(${accent}, 0.04)`;
+      ctx.lineWidth = 1;
+      const gridSize = 48;
+      for (let x = 0; x < bgCanvas.width; x += gridSize) {
+        ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, bgCanvas.height); ctx.stroke();
+      }
+      for (let y = 0; y < bgCanvas.height; y += gridSize) {
+        ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(bgCanvas.width, y); ctx.stroke();
+      }
+
+      // Nodos de red y conexiones
+      const speedMult = currentTempRef >= 80 ? 2.4 : currentTempRef >= 65 ? 1.5 : 1;
+      for (let i = 0; i < nodes.length; i++) {
+        const n = nodes[i];
+        n.x += n.vx * speedMult;
+        n.y += n.vy * speedMult;
+        if (n.x < 0 || n.x > bgCanvas.width) n.vx *= -1;
+        if (n.y < 0 || n.y > bgCanvas.height) n.vy *= -1;
+
+        ctx.fillStyle = `rgba(${accent}, 0.55)`;
+        ctx.beginPath();
+        ctx.arc(n.x, n.y, n.r, 0, Math.PI * 2);
+        ctx.fill();
+
+        if (i % 5 === 0) {
+          ctx.fillStyle = `rgba(${accent}, 0.22)`;
+          ctx.font = "10px Consolas, monospace";
+          ctx.fillText(n.hex, n.x + 6, n.y + 3);
+        }
+
+        for (let j = i + 1; j < nodes.length; j++) {
+          const m = nodes[j];
+          const dist = Math.hypot(n.x - m.x, n.y - m.y);
+          if (dist < 130) {
+            ctx.strokeStyle = `rgba(${accent}, ${(1 - dist / 130) * 0.16})`;
+            ctx.beginPath();
+            ctx.moveTo(n.x, n.y);
+            ctx.lineTo(m.x, m.y);
+            ctx.stroke();
+          }
+        }
+      }
+      requestAnimationFrame(drawBackground);
+    }
+    drawBackground();
+
+    // =========================================================================
+    // 2. MOTOR DE AUDIO: EFECTOS SFX + MÚSICA SYNTHWAVE PROCEDURAL
+    // =========================================================================
+    let audioCtx = null;
+    let sfxMuted = false;
+    let musicEnabled = true;
+    let musicPlaying = false;
+    let musicTimer = null;
+    let musicStep = 0;
+
+    async function initAudio() {
+      if (!audioCtx) {
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      }
+      if (audioCtx.state === "suspended") {
+        await audioCtx.resume();
+      }
+    }
+
+    function playTone(freq, duration, type = "sine", volume = 0.08) {
+      if (sfxMuted || !audioCtx || audioCtx.state !== "running") return;
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      osc.type = type;
+      osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+      gain.gain.setValueAtTime(volume, audioCtx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + duration);
+      osc.connect(gain);
+      gain.connect(audioCtx.destination);
+      osc.start();
+      osc.stop(audioCtx.currentTime + duration);
+    }
+
+    const SFX = {
+      ok: () => { playTone(523.25, 0.12, "triangle"); setTimeout(() => playTone(659.25, 0.18, "triangle"), 90); },
+      err: () => { playTone(160, 0.25, "sawtooth", 0.12); setTimeout(() => playTone(120, 0.3, "sawtooth", 0.12), 140); },
+      tick: () => playTone(880, 0.05, "square", 0.03),
+      lifeline: () => { playTone(440, 0.1, "sine"); setTimeout(() => playTone(740, 0.15, "sine"), 80); },
+      crash: () => { playTone(140, 0.6, "sawtooth", 0.16); setTimeout(() => playTone(90, 0.7, "sawtooth", 0.16), 250); }
+    };
+
+    // Secuenciador dark-synthwave en La menor (A minor) que acelera con la temperatura
+    const bassPattern = [110, 110, 130.81, 110, 98, 98, 87.31, 98];
+    const arpPattern  = [440, 523.25, 659.25, 523.25, 392, 493.88, 587.33, 493.88];
+
+    function playMusicStep() {
+      if (!musicEnabled || !musicPlaying || !audioCtx || audioCtx.state !== "running") return;
+      const now = audioCtx.currentTime;
+
+      const bassOsc = audioCtx.createOscillator();
+      const bassFilter = audioCtx.createBiquadFilter();
+      const bassGain = audioCtx.createGain();
+      bassOsc.type = "sawtooth";
+      bassOsc.frequency.setValueAtTime(bassPattern[musicStep % bassPattern.length], now);
+      bassFilter.type = "lowpass";
+      bassFilter.frequency.setValueAtTime(currentTempRef >= 75 ? 480 : 280, now);
+      bassGain.gain.setValueAtTime(0.045, now);
+      bassGain.gain.exponentialRampToValueAtTime(0.001, now + 0.19);
+      bassOsc.connect(bassFilter);
+      bassFilter.connect(bassGain);
+      bassGain.connect(audioCtx.destination);
+      bassOsc.start(now);
+      bassOsc.stop(now + 0.2);
+
+      if (musicStep % 2 === 0) {
+        const arpOsc = audioCtx.createOscillator();
+        const arpGain = audioCtx.createGain();
+        arpOsc.type = "triangle";
+        arpOsc.frequency.setValueAtTime(arpPattern[(musicStep / 2) % arpPattern.length], now);
+        arpGain.gain.setValueAtTime(0.022, now);
+        arpGain.gain.exponentialRampToValueAtTime(0.001, now + 0.22);
+        arpOsc.connect(arpGain);
+        arpGain.connect(audioCtx.destination);
+        arpOsc.start(now);
+        arpOsc.stop(now + 0.23);
+      }
+
+      musicStep++;
+      const stepMs = currentTempRef >= 80 ? 175 : currentTempRef >= 65 ? 210 : 250;
+      musicTimer = setTimeout(playMusicStep, stepMs);
+    }
+
+    function startMusic() {
+      if (!musicEnabled || !audioCtx || audioCtx.state !== "running" || musicPlaying) return;
+      musicPlaying = true;
+      playMusicStep();
+    }
+
+    function stopMusic() {
+      musicPlaying = false;
+      clearTimeout(musicTimer);
+      musicTimer = null;
+    }
+
+    // Desbloquea y arranca la música automáticamente en la primera interacción del usuario
+    async function unlockAudioAndStart(e) {
+      if (e && e.target && e.target.id === "music-btn") return;
+      await initAudio();
+      if (musicEnabled) startMusic();
+      if (audioCtx && audioCtx.state === "running") {
+        window.removeEventListener("pointerdown", unlockAudioAndStart);
+        window.removeEventListener("keydown", unlockAudioAndStart);
+      }
+    }
+
+    window.addEventListener("pointerdown", unlockAudioAndStart);
+    window.addEventListener("keydown", unlockAudioAndStart);
+
+    // Si el navegador ya permite autoplay en localhost, arranca de inmediato
+    window.addEventListener("load", () => {
+      try {
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        if (audioCtx.state === "running" && musicEnabled) {
+          startMusic();
+          window.removeEventListener("pointerdown", unlockAudioAndStart);
+          window.removeEventListener("keydown", unlockAudioAndStart);
+        }
+      } catch (_) {}
+    });
+
+    document.getElementById("music-btn").addEventListener("click", async (e) => {
+      await initAudio();
+      musicEnabled = !musicEnabled;
+      e.target.textContent = musicEnabled ? "🎵 Música ON" : "🎵 Música OFF";
+      if (musicEnabled) startMusic(); else stopMusic();
+    });
+
+    document.getElementById("mute-btn").addEventListener("click", (e) => {
+      sfxMuted = !sfxMuted;
+      e.target.textContent = sfxMuted ? "🔇 SFX OFF" : "🔊 SFX ON";
+    });
+
+    // =========================================================================
+    // 3. ESTADO DEL JUEGO Y LÓGICA PRINCIPAL
+    // =========================================================================
+    let questions = [];
+    let currentIndex = 0;
+    let score = 0;
+    let temp = 45;
+    let cpu = 32;
+    let ram = 40;
+    let timer = null;
+    let timeLeft = 20;
+    let hotfixUsed = false;
+    let stackUsed = false;
+    let survived = true;
+    let selectedStars = 0;
+    let lastActiveScreenId = "start-screen";
+    let cachedRecords = [];
+
+    function logConsole(msg, type = "info") {
+      const box = document.getElementById("console-log");
+      const line = document.createElement("div");
+      line.className = `log-${type}`;
+      line.textContent = `[${new Date().toLocaleTimeString()}] ${msg}`;
+      box.appendChild(line);
+      box.scrollTop = box.scrollHeight;
+    }
+
+    function updateTelemetry(statusCode = "200 OK", statusClass = "") {
+      temp = Math.max(35, Math.min(100, temp));
+      cpu = Math.max(15, Math.min(100, cpu));
+      ram = Math.max(25, Math.min(100, ram));
+      currentTempRef = temp;
+
+      document.getElementById("temp-val").textContent = `${temp}°C`;
+      document.getElementById("cpu-val").textContent = `${cpu}%`;
+      document.getElementById("ram-val").textContent = `${ram}%`;
+
+      const setBar = (id, val) => {
+        const el = document.getElementById(id);
+        el.style.width = `${val}%`;
+        el.style.background = val >= 80 ? "var(--red)" : val >= 65 ? "var(--amber)" : "var(--green)";
+      };
+      setBar("temp-bar", temp);
+      setBar("cpu-bar", cpu);
+      setBar("ram-bar", ram);
+
+      const pill = document.getElementById("http-status");
+      pill.textContent = statusCode;
+      pill.className = `status-pill ${statusClass}`;
+    }
+
+    function triggerGlitch() {
+      const root = document.getElementById("app-root");
+      const flash = document.getElementById("red-flash");
+      root.classList.remove("shake");
+      void root.offsetWidth;
+      root.classList.add("shake");
+      flash.style.opacity = "1";
+      setTimeout(() => (flash.style.opacity = "0"), 240);
+    }
+
+    function showOnlyScreen(id) {
+      ["start-screen", "quiz-screen", "qa-screen", "result-screen", "records-screen"].forEach((s) => {
+        document.getElementById(s).classList.toggle("hidden", s !== id);
+      });
+      if (id !== "records-screen") lastActiveScreenId = id;
+      document.getElementById("records-btn").classList.toggle("active", id === "records-screen");
+    }
+
+    // --- INICIAR PARTIDA ---
+    document.getElementById("start-btn").addEventListener("click", async () => {
+      await initAudio();
+      startMusic();
+      SFX.lifeline();
+
+      const res = await fetch("/api/questions");
+      questions = await res.json();
+
+      showOnlyScreen("quiz-screen");
+      logConsole(`Guardia iniciada. ${questions.length} incidencias aleatorias en cola.`, "ok");
+      renderQuestion();
+    });
+
+    function renderQuestion() {
+      if (temp >= 100) return finishGame(false);
+      if (currentIndex >= questions.length) return finishGame(true);
+
+      const q = questions[currentIndex];
+      document.getElementById("module-tag").textContent = `[MÓDULO: ${q.module}]`;
+      document.getElementById("progress-tag").textContent = `Incidencia ${currentIndex + 1} / ${questions.length}`;
+      document.getElementById("question-text").textContent = q.question;
+
+      const grid = document.getElementById("options-grid");
+      grid.innerHTML = "";
+      q.options.forEach((opt, idx) => {
+        const btn = document.createElement("button");
+        btn.className = "option-btn";
+        btn.dataset.index = idx;
+        btn.textContent = `${String.fromCharCode(65 + idx)}) ${opt}`;
+        btn.onclick = () => handleAnswer(idx, btn);
+        grid.appendChild(btn);
+      });
+
+      startTimer();
+    }
+
+    function startTimer() {
+      clearInterval(timer);
+      timeLeft = 20;
+      const display = document.getElementById("timer-display");
+      display.textContent = `⏱️ ${timeLeft}s`;
+      display.classList.remove("urgent");
+
+      timer = setInterval(() => {
+        timeLeft--;
+        display.textContent = `⏱️ ${timeLeft}s`;
+        if (timeLeft <= 5 && timeLeft > 0) {
+          display.classList.add("urgent");
+          SFX.tick();
+        }
+        if (timeLeft <= 0) {
+          clearInterval(timer);
+          handleTimeout();
+        }
+      }, 1000);
+    }
+
+    function lockOptions() {
+      document.querySelectorAll(".option-btn").forEach((b) => (b.disabled = true));
+    }
+
+    function handleAnswer(selectedIdx, btnEl) {
+      clearInterval(timer);
+      lockOptions();
+      const q = questions[currentIndex];
+
+      if (selectedIdx === q.correct) {
+        score++;
+        temp -= 5;
+        cpu -= 6;
+        ram -= 4;
+        btnEl.classList.add("correct");
+        SFX.ok();
+        updateTelemetry("200 OK", "");
+        logConsole(`[200 OK] Módulo ${q.module} estabilizado correctamente.`, "ok");
+      } else {
+        temp += 20;
+        cpu += 18;
+        ram += 15;
+        btnEl.classList.add("wrong");
+        const correctBtn = document.querySelector(`.option-btn[data-index="${q.correct}"]`);
+        if (correctBtn) correctBtn.classList.add("correct");
+        SFX.err();
+        triggerGlitch();
+        updateTelemetry("500 ERROR", "err");
+        logConsole(`[500 ERROR] Fallo en ${q.module}. ¡Temperatura subió a ${temp}°C!`, "err");
+      }
+
+      currentIndex++;
+      setTimeout(renderQuestion, 1300);
+    }
+
+    function handleTimeout() {
+      lockOptions();
+      const q = questions[currentIndex];
+      temp += 20;
+      cpu += 20;
+      ram += 15;
+      SFX.err();
+      triggerGlitch();
+      updateTelemetry("504 TIMEOUT", "err");
+      logConsole(`[504 TIMEOUT] Sin respuesta en ${q.module}. Servidor sobrecalentándose.`, "err");
+      currentIndex++;
+      setTimeout(renderQuestion, 1300);
+    }
+
+    // --- COMODINES ---
+    document.getElementById("btn-hotfix").addEventListener("click", (e) => {
+      if (hotfixUsed) return;
+      hotfixUsed = true;
+      e.target.disabled = true;
+      SFX.lifeline();
+
+      const q = questions[currentIndex];
+      const wrongBtns = [...document.querySelectorAll(".option-btn")]
+        .filter((b) => Number(b.dataset.index) !== q.correct);
+
+      wrongBtns.sort(() => Math.random() - 0.5).slice(0, 2).forEach((b) => {
+        b.disabled = true;
+        b.classList.add("eliminated");
+      });
+      logConsole("[HOTFIX] Parche aplicado: 2 opciones descartadas.", "warn");
+    });
+
+    document.getElementById("btn-stack").addEventListener("click", (e) => {
+      if (stackUsed) return;
+      stackUsed = true;
+      e.target.disabled = true;
+      SFX.lifeline();
+
+      const q = questions[currentIndex];
+      logConsole(`[STACK OVERFLOW] Pista: ${q.hint}`, "info");
+    });
+
+    // --- CIERRE Y TICKET QA ---
+    function finishGame(didSurvive) {
+      clearInterval(timer);
+      survived = didSurvive;
+      showOnlyScreen("qa-screen");
+
+      const headline = document.getElementById("qa-headline");
+      if (didSurvive) {
+        updateTelemetry("200 DEPLOYED", "");
+        headline.textContent = "✅ DEPLOY COMPLETADO — FIRMA EL TICKET QA";
+        logConsole("Todas las incidencias procesadas. Esperando firma de QA...", "ok");
+      } else {
+        SFX.crash();
+        triggerGlitch();
+        updateTelemetry("503 CRASH", "err");
+        headline.textContent = "🔥 SYSTEM CRASH (100°C) — REPORTE POST-MORTEM OBLIGATORIO";
+        logConsole("CRITICAL: KERNEL PANIC. Documenta tu experiencia para cerrar el incidente.", "err");
+      }
+    }
+
+    document.querySelectorAll("#star-rating .star").forEach((star) => {
+      star.addEventListener("click", () => {
+        selectedStars = Number(star.dataset.val);
+        document.querySelectorAll("#star-rating .star").forEach((s) => {
+          s.classList.toggle("active", Number(s.dataset.val) <= selectedStars);
+        });
+        SFX.tick();
+      });
+    });
+
+    document.getElementById("qa-form").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const errorBox = document.getElementById("qa-error");
+      errorBox.textContent = "";
+
+      const payload = {
+        player_name: document.getElementById("player-name").value,
+        rating: selectedStars,
+        ux_feel: document.getElementById("ux-feel").value,
+        comment: document.getElementById("qa-comment").value,
+        score,
+        total: questions.length,
+        survived,
+        final_temp: temp
+      };
+
+      const res = await fetch("/api/submit-qa", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        errorBox.textContent = `⚠️ ${data.error}`;
+        SFX.err();
+        return;
+      }
+
+      SFX.ok();
+      showOnlyScreen("result-screen");
+
+      const b = data.badge;
+      document.getElementById("badge-card").style.borderColor = b.color;
+      document.getElementById("badge-icon").textContent = b.icon;
+      document.getElementById("badge-title").textContent = b.title;
+      document.getElementById("badge-title").style.color = b.color;
+      document.getElementById("badge-desc").textContent = b.desc;
+
+      document.getElementById("final-score").textContent = `Aciertos: ${score}/${questions.length}`;
+      document.getElementById("final-temp").textContent = `Temp Final: ${temp}°C`;
+      document.getElementById("community-avg").textContent =
+        `UX Global (${data.stats.total_reviews} votos): ★ ${data.stats.avg_rating}`;
+
+      logConsole("Ticket QA registrado en qa_reviews.json. Badge desbloqueado.", "ok");
+    });
+
+    // =========================================================================
+    // 4. TABLA DE PUNTUACIONES Y COMENTARIOS QA
+    // =========================================================================
+    function escapeHtml(text) {
+      const div = document.createElement("div");
+      div.textContent = text;
+      return div.innerHTML;
+    }
+
+    function renderRecordsTable(sortMode = "recent") {
+      const tbody = document.getElementById("records-tbody");
+      if (!cachedRecords.length) {
+        tbody.innerHTML = `<tr><td colspan="8" style="text-align:center; color: var(--muted); padding: 20px;">Aún no hay guardias registradas. ¡Sé el primero en jugar y firmar un Ticket QA!</td></tr>`;
+        return;
+      }
+
+      const list = [...cachedRecords];
+      if (sortMode === "score") {
+        list.sort((a, b) => (b.game_result?.score || 0) - (a.game_result?.score || 0));
+      } else if (sortMode === "rating") {
+        list.sort((a, b) => (b.rating_stars || 0) - (a.rating_stars || 0));
+      }
+
+      tbody.innerHTML = list.map((r) => {
+        const res = r.game_result || {};
+        const statusHtml = res.survived
+          ? `<span class="tag-ok">200 OK</span>`
+          : `<span class="tag-crash">CRASH</span>`;
+        const badgeText = r.badge_title ? `${r.badge_icon || ""} ${escapeHtml(r.badge_title)}` : statusHtml;
+        const stars = "★".repeat(r.rating_stars || 0) + "☆".repeat(5 - (r.rating_stars || 0));
+
+        return `
+          <tr>
+            <td><strong>${escapeHtml(r.player || "Dev_Anonimo")}</strong></td>
+            <td>${statusHtml}<br><small style="color: var(--muted);">${badgeText}</small></td>
+            <td><strong>${res.score ?? 0}/${res.total_questions ?? 8}</strong></td>
+            <td>${res.final_temp_c ?? 0}°C</td>
+            <td class="star-cell">${stars}</td>
+            <td>${escapeHtml(r.ux_perception || "-")}</td>
+            <td>${escapeHtml(r.comment || "")}</td>
+            <td style="white-space: nowrap; color: var(--muted);">${escapeHtml(r.timestamp || "")}</td>
+          </tr>
+        `;
+      }).join("");
+    }
+
+    async function openRecordsView() {
+      showOnlyScreen("records-screen");
+      const res = await fetch("/api/reviews");
+      const data = await res.json();
+
+      document.getElementById("kpi-total").textContent = data.total_encuestados;
+      document.getElementById("kpi-avg").textContent = `★ ${data.promedio_ux}`;
+      document.getElementById("kpi-surv").textContent = `${data.tasa_supervivencia}%`;
+
+      cachedRecords = data.registros || [];
+      renderRecordsTable(document.getElementById("sort-records").value);
+    }
+
+    document.getElementById("records-btn").addEventListener("click", () => {
+      const isOpen = !document.getElementById("records-screen").classList.contains("hidden");
+      if (isOpen) showOnlyScreen(lastActiveScreenId);
+      else openRecordsView();
+    });
+
+    document.getElementById("go-records-btn").addEventListener("click", openRecordsView);
+    document.getElementById("back-game-btn").addEventListener("click", () => showOnlyScreen(lastActiveScreenId));
+    document.getElementById("sort-records").addEventListener("change", (e) => renderRecordsTable(e.target.value));
+  </script>
+</body>
+</html>
