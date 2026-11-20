@@ -26,5 +26,20 @@
       "survived": true,
       "final_temp_c": 80
     }
+  },
+  {
+    "timestamp": "2026-11-20 13:42:35",
+    "player": "Edgar",
+    "rating_stars": 5,
+    "ux_perception": "Muy estresante",
+    "comment": "Candela",
+    "badge_title": "CAUSANTE DEL KERNEL PANIC",
+    "badge_icon": "💀",
+    "game_result": {
+      "score": 2,
+      "total_questions": 8,
+      "survived": false,
+      "final_temp_c": 100
+    }
   }
 ]
